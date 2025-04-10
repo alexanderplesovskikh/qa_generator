@@ -1,3 +1,4 @@
+
 import zulip
 import os
 import logging
@@ -67,31 +68,31 @@ try:
                     file_pattern = r'^\[.*?\]\(/user_uploads/.*?\)$'
                     is_only_file_link = bool(re.fullmatch(file_pattern, raw_content))
                     print(is_only_file_link)
+                    print(message['content'].strip()[-5:])
 
-                    self.send_reply(message, f'''File got {is_only_file_link}''')
-
-                '''if 'attachments' in message and message['attachments']:
-                    for attachment in message['attachments']:
-                        if attachment['name'].endswith('.txt'):
-                            # Successful attachment case
-                            user_states[user_id] = {
-                                   "state": "select_level",
-                                   "filename": attachment['name'],
-                                   "file_id": attachment['id']
-                                }
-                            self.send_reply(message, "Какой у вас уровень знаний по теме? Выбери, введя соответствующую цифру: \n**`1. начальный`**\n**`2. средний`**\n**`3. продвинутый`**\n\nЧтобы вернуться в главное меню, введи: **`помощь`**")
+                    if is_only_file_link == False or len(message['content'].strip())<= 5 or message['content'].strip()[-5:] != ".txt)":
+                        self.send_reply(message, f'''Ooops, not txt file, send me file again...''')
+                    else:
+                        match = re.search(r'\[(.*?)\]', raw_content)  # Non-greedy match
+                        if match:
+                            content_file_raw = match.group(1)  # "some content"
+                            file_ext = content_file_raw.split(".")[-1]
+                            file_name = ".".join(content_file_raw.split(".")[:-1])
+                            self.send_reply(message, f"Super filename {file_name} ext {file_ext} enter number:")
+                            user_states[user_id] = {"state": "select_level"}
+                            return
                         else:
-                            self.send_reply(message, "Passing for not txt file")
-                else:
-                    self.send_reply(message, "Пожалуйста, отправьте .txt файл с темой для обсуждения.\n\nЧтобы увидеть главное меню, введи: **`start`**")'''
-                
+                            content = None  # No brackets found
+                            self.send_reply(message, "No file, press start")
+
+
             elif user_states[user_id]["state"] == "select_level":
                 if re.match(r"^\d+$", content.strip()):
-                    user_states[user_id] = {"state": "chat", "topic": user_states[user_id]["topic"], "level": content}
-                    topic = user_states[user_id]["topic"]
-                    user_history[user_id] = []
+                    user_states[user_id] = {"state": "chat"}
                     
                     self.send_reply(message, "👨‍🏫 Давай посмотрим, что нам предстоит узнать в рамках этой темы.")
+
+                    return
                 
                 else:
                     self.send_reply(message, "Пожалуйста, выберите уровень, введя соответствующую цифру: \n**`1. начальный`** \n**`2. средний`** \n**`3. продвинутый`**\n\nЧтобы вернуться в главное меню, введи: **`помощь`**")
