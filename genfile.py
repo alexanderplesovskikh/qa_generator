@@ -4,6 +4,8 @@ import os
 import logging
 import re
 import traceback
+import requests
+from urllib.parse import urljoin
 
 user_states = {}
 user_history = {}
@@ -78,7 +80,14 @@ try:
                             content_file_raw = match.group(1)  # "some content"
                             file_ext = content_file_raw.split(".")[-1]
                             file_name = ".".join(content_file_raw.split(".")[:-1])
-                            self.send_reply(message, f"Super filename {file_name} ext {file_ext} enter number:")
+
+                            result = self.client.get_attachments()
+                            print(result)
+                            print()
+                            print(message)
+
+
+                            self.send_reply(message, f"Super filename {file_name} ext {file_ext} enter number\n{1}:")
                             user_states[user_id] = {"state": "select_level"}
                             return
                         else:
@@ -107,4 +116,3 @@ try:
 
 except Exception:
     traceback.print_exc()
-
