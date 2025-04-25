@@ -22,6 +22,7 @@ init_ollama = OllamaLLM(
     temperature = 0.3,
     streaming=True,
     num_ctx=4096,
+    num_predict=1,
 )
 
 def format_llm_prompt(query):
@@ -39,7 +40,7 @@ def generate_question(sentence):
 def generate_answer(question):
     template = f"""Тебе нужно сгенерировать ответ на данный вопрос:
     {question}.
-    В твоем ответе укажи ТОЛЬКО сам ответ на вопрос, ничего больше не пиши.
+    Напиши только 1 абзац ответа, не пиши много, не пиши больше одного абзаца. В твоем ответе укажи ТОЛЬКО сам ответ на вопрос, ничего больше не пиши.
     """
     res = format_llm_prompt(template)
     return res
@@ -50,7 +51,7 @@ user_history = {}
 user_file_names = {}
 user_file_contents= {}
 
-main_menu = "Привет! Я бот-помощник, который умеет генерировать вопросы и ответы для составления экзамена по учебному курсу. Отправь мне ниже файл в формате .txt с материалами по **теме** курса (один файл - одна тема)"
+main_menu = "Привет! Я бот-помощник, который умеет генерировать вопросы и ответы для составления экзамена по учебному курсу. Отправь мне ниже файл в формате .txt / .md с материалами по **теме** курса *(один файл — одна тема)*"
 
 try:
 
@@ -112,8 +113,8 @@ try:
                     print(is_only_file_link)
                     print(message['content'].strip()[-5:])
 
-                    if is_only_file_link == False or len(message['content'].strip())<= 5 or message['content'].strip()[-5:] != ".txt)":
-                        self.send_reply(message, f'''Упс... это не текстовый файл формата .txt, отправь еще раз...''')
+                    if is_only_file_link == False or len(message['content'].strip())<= 5 or (message['content'].strip()[-5:].lower() != ".txt)" and message['content'].strip()[-4:].lower() != ".md)"):
+                        self.send_reply(message, f'''Упс... это не текстовый файл формата .txt / .md, отправь файл в формате .txt / .md...''')
                     else:
                         match = re.search(r'\[(.*?)\]', raw_content)  # Non-greedy match
                         if match:
@@ -126,26 +127,19 @@ try:
                             print()
                             print(message)
 
-                            #for testing
-                            test_file = f"""
-Сегодня выдался прекрасный солнечный день, и я решил прогуляться по парку. Воздух был свежим, а вокруг цвели деревья, создавая уютную атмосферу. По дороге мне встретились несколько друзей, и мы вместе посидели на скамейке, обсуждая последние новости. Такие моменты напоминают, как важно ценить простые радости жизни.
-
-Вечером я приготовил вкусный ужин — пасту с томатным соусом и свежей зеленью. После еды включил любимый фильм и устроился на диване с чашкой чая. За окном медленно наступали сумерки, а в комнате царило тепло и умиротворение. Иногда именно такие спокойные вечера становятся самыми приятными.
-
-Если нужно что-то конкретное или определённого стиля — дай знать! 😊
-                    """
-
+                            with open("/home/user/vt5_file/test1.txt", "r", encoding="utf-8") as file_open:
+                                test_file = file_open.read()
 
                             user_file_names[user_id] = str(file_name+"."+file_ext)
                             user_file_contents[user_id] = str(test_file)
 
 
-                            self.send_reply(message, f"Супер! Получил твой файл {file_name}.{file_ext} и уже начал генерацию вопросов...\nPress number to continue:")
+                            self.send_reply(message, f"Супер! Получил твой файл {file_name}.{file_ext}. Введи число вопросов для генерации:")
                             user_states[user_id] = {"state": "select_level"}
                             return
                         else:
                             content = None  # No brackets found
-                            self.send_reply(message, "No file, press start")
+                            self.send_reply(message, "Ошибка: Файл не найден")
 
 
             elif user_states[user_id]["state"] == "select_level":
@@ -154,11 +148,14 @@ try:
 
 
                     max_number_of_questions = content.strip()
+                    max_number_of_questions = int(max_number_of_questions)
 
 
                    
 
-                    self.send_reply(message, f'''Hooray! I see file content and already generating answers. I will notify you when I'm done. Please wait a bit. Now you can leave this page...\nYou content is down below:\n{user_file_contents[user_id]}''')
+                    self.send_reply(message, f'''Я получил твой файл и начал генерацию вопросов и ответов к ним. Я уведомлю тебя, как закончу. Пожалуйста, подожди окончания генерация, ты можешь уйти с этой страницы во время ожидания...''')
+
+                    print(user_file_contents[user_id])
 
                     sents_paragraphs = user_file_contents[user_id].split("\n")
 
@@ -169,6 +166,9 @@ try:
                         for i in res:
                             if len(i) >= 30:
                                 all_sents_splitted.append(i)
+
+                    if len(all_sents_splitted) > max_number_of_questions:
+                        all_sents_splitted = all_sents_splitted[:max_number_of_questions]
 
                     generated_questions = []
                     generated_answers = []
@@ -185,7 +185,7 @@ try:
                         percentage = i / len(all_sents_splitted) * 100
                         formatted_percentage = f"{percentage:.2f}"
 
-                        self.send_reply(message, f'''Progress: {formatted_percentage} %''')
+                        self.send_reply(message, f'''Прогресс генерации: {formatted_percentage} %''')
 
 
                     
@@ -210,9 +210,13 @@ try:
                         columns=["#", "File", "Date", "Question", "Answer"]
                     )
 
-                    df.to_excel("/home/user/vt5_file/test1.xlsx", index=False)
+                    df.to_excel(f"/home/user/vt5_file/test_{str(user_id)}.xlsx", index=False)
 
-                    self.send_reply(message, f"""User id: {str(user_id)}""")
+                    df_markdown = df.to_markdown()
+
+                    self.send_reply(message, f'''Я завершил генерацию!''')
+
+                    self.send_reply(message, f"""Вот твой файл с вопросами:\n{df_markdown}""")
 
 
                     user_states[user_id]["state"] = "main_menu"
@@ -222,7 +226,7 @@ try:
                     return
                 
                 else:
-                    self.send_reply(message, "Пожалуйста, выберите уровень, введя соответствующую цифру: \n**`1. начальный`** \n**`2. средний`** \n**`3. продвинутый`**\n\nЧтобы вернуться в главное меню, введи: **`помощь`**")
+                    self.send_reply(message, "Пожалуйста, введи только целое число вопросов для генерации (например, 10)...")
 
             elif user_states[user_id]["state"] == "chat":
                 topic = user_states[user_id]["topic"]
