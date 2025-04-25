@@ -1,5 +1,8 @@
 # genfile
 
+```
+zulip-run-bot genfile --config-file genfile/zuliprc
+```
 
 
 ## Getting started
