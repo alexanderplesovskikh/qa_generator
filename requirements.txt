@@ -1,5 +1,6 @@
 zulip
 pandas
+tabulate
 openpyxl
 nltk
 langchain
