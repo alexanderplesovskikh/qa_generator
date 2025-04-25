@@ -6,11 +6,51 @@ import re
 import traceback
 import requests
 from urllib.parse import urljoin
+from langchain_ollama.llms import OllamaLLM
+from datetime import datetime
+from nltk.tokenize import sent_tokenize
+import pandas as pd
+
+#downloads
+from nltk import download
+download('punkt_tab')
+
+model_ollama = "owl/t-lite:latest"
+
+init_ollama = OllamaLLM(
+    model=model_ollama,
+    temperature = 0.3,
+    streaming=True,
+    num_ctx=4096,
+)
+
+def format_llm_prompt(query):
+    response = init_ollama.invoke(query)
+    return response
+
+def generate_question(sentence):
+    template = f"""Тебе нужно сгенерировать 1 (один вопрос), опираясь только на следующую информацию:
+    {sentence}.
+    В твоем ответе укажи ТОЛЬКО сам один вопрос, ничего больше в ответе не пиши.
+    """
+    res = format_llm_prompt(template)
+    return res
+
+def generate_answer(question):
+    template = f"""Тебе нужно сгенерировать ответ на данный вопрос:
+    {question}.
+    В твоем ответе укажи ТОЛЬКО сам ответ на вопрос, ничего больше не пиши.
+    """
+    res = format_llm_prompt(template)
+    return res
+
 
 user_states = {}
 user_history = {}
+user_file_names = {}
+user_file_contents= {}
 
-main_menu = "Привет! Я бот-помощник, который умеет генерировать вопросы и ответы для составления экзамена по учебному курсу. Отправь мне ниже файл в формате txt с материалами по ТЕМЕ курса, один файл - одна тема:"
+main_menu = "Привет! Я бот-помощник, который умеет генерировать вопросы и ответы для составления экзамена по учебному курсу. Отправь мне ниже файл в формате .txt с материалами по **теме** курса (один файл - одна тема)"
 
 try:
 
@@ -73,7 +113,7 @@ try:
                     print(message['content'].strip()[-5:])
 
                     if is_only_file_link == False or len(message['content'].strip())<= 5 or message['content'].strip()[-5:] != ".txt)":
-                        self.send_reply(message, f'''Ooops, not txt file, send me file again...''')
+                        self.send_reply(message, f'''Упс... это не текстовый файл формата .txt, отправь еще раз...''')
                     else:
                         match = re.search(r'\[(.*?)\]', raw_content)  # Non-greedy match
                         if match:
@@ -86,8 +126,21 @@ try:
                             print()
                             print(message)
 
+                            #for testing
+                            test_file = f"""
+Сегодня выдался прекрасный солнечный день, и я решил прогуляться по парку. Воздух был свежим, а вокруг цвели деревья, создавая уютную атмосферу. По дороге мне встретились несколько друзей, и мы вместе посидели на скамейке, обсуждая последние новости. Такие моменты напоминают, как важно ценить простые радости жизни.
 
-                            self.send_reply(message, f"Super filename {file_name} ext {file_ext} enter number\n{1}:")
+Вечером я приготовил вкусный ужин — пасту с томатным соусом и свежей зеленью. После еды включил любимый фильм и устроился на диване с чашкой чая. За окном медленно наступали сумерки, а в комнате царило тепло и умиротворение. Иногда именно такие спокойные вечера становятся самыми приятными.
+
+Если нужно что-то конкретное или определённого стиля — дай знать! 😊
+                    """
+
+
+                            user_file_names[user_id] = str(file_name+"."+file_ext)
+                            user_file_contents[user_id] = str(test_file)
+
+
+                            self.send_reply(message, f"Супер! Получил твой файл {file_name}.{file_ext} и уже начал генерацию вопросов...\nPress number to continue:")
                             user_states[user_id] = {"state": "select_level"}
                             return
                         else:
@@ -98,8 +151,73 @@ try:
             elif user_states[user_id]["state"] == "select_level":
                 if re.match(r"^\d+$", content.strip()):
                     user_states[user_id] = {"state": "chat"}
+
+
+                    max_number_of_questions = content.strip()
+
+
+                   
+
+                    self.send_reply(message, f'''Hooray! I see file content and already generating answers. I will notify you when I'm done. Please wait a bit. Now you can leave this page...\nYou content is down below:\n{user_file_contents[user_id]}''')
+
+                    sents_paragraphs = user_file_contents[user_id].split("\n")
+
+                    all_sents_splitted = []
+
+                    for sent in sents_paragraphs:
+                        res = sent_tokenize(sent)
+                        for i in res:
+                            if len(i) >= 30:
+                                all_sents_splitted.append(i)
+
+                    generated_questions = []
+                    generated_answers = []
+
+                    for i in range(len(all_sents_splitted)):
+                        current_question = generate_question(all_sents_splitted[i])
+                        print(current_question)
+                        generated_questions.append(current_question)
+
+                        current_answer = generate_answer(current_question)
+                        print(current_answer)
+                        generated_answers.append(current_answer)
+
+                        percentage = i / len(all_sents_splitted) * 100
+                        formatted_percentage = f"{percentage:.2f}"
+
+                        self.send_reply(message, f'''Progress: {formatted_percentage} %''')
+
+
                     
-                    self.send_reply(message, "👨‍🏫 Давай посмотрим, что нам предстоит узнать в рамках этой темы.")
+                    
+                 
+                        
+
+                    all_massive = []
+                    current_date = datetime.now().strftime("%d.%m.%Y")
+                    for i in range(len(generated_questions)):
+                        all_massive.append([
+                            i+1,
+                            user_file_names[user_id],
+                            current_date,
+                            generated_questions[i], 
+                            generated_answers[i], 
+                        ])
+
+                    # 2. Convert to a Pandas DataFrame
+                    df = pd.DataFrame(
+                        all_massive,
+                        columns=["#", "File", "Date", "Question", "Answer"]
+                    )
+
+                    df.to_excel("/home/user/vt5_file/test1.xlsx", index=False)
+
+                    self.send_reply(message, f"""User id: {str(user_id)}""")
+
+
+                    user_states[user_id]["state"] = "main_menu"
+
+
 
                     return
                 
