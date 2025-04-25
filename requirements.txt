@@ -1,1 +1,6 @@
 zulip
+pandas
+openpyxl
+nltk
+langchain
+langchain_ollama
