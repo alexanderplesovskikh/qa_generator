@@ -22,7 +22,7 @@ init_ollama = OllamaLLM(
     temperature = 0.3,
     streaming=True,
     num_ctx=4096,
-    num_predict=1,
+    num_predict=512,
 )
 
 def format_llm_prompt(query):
@@ -51,7 +51,7 @@ user_history = {}
 user_file_names = {}
 user_file_contents= {}
 
-main_menu = "Привет! Я бот-помощник, который умеет генерировать вопросы и ответы для составления экзамена по учебному курсу. Отправь мне ниже файл в формате .txt / .md с материалами по **теме** курса *(один файл — одна тема)*"
+main_menu = "Я бот-помощник, который умеет генерировать вопросы ❓ и ответы 🎯 для составления экзамена по учебному курсу. Отправь мне ниже файл в формате .txt / .md с материалами по **теме** курса *(один файл — одна тема)*"
 
 try:
 
@@ -122,19 +122,49 @@ try:
                             file_ext = content_file_raw.split(".")[-1]
                             file_name = ".".join(content_file_raw.split(".")[:-1])
 
-                            result = self.client.get_attachments()
-                            print(result)
-                            print()
-                            print(message)
+
 
                             with open("/home/user/vt5_file/test1.txt", "r", encoding="utf-8") as file_open:
                                 test_file = file_open.read()
 
+
+
                             user_file_names[user_id] = str(file_name+"."+file_ext)
-                            user_file_contents[user_id] = str(test_file)
+                            
+
+                            match = re.search(r'\[(.*?)\]\((/user_uploads/.*?)\)', raw_content)
+                            if match:
+                                filename_ = match.group(1)  # "news_sents-1.txt"
+                                file_path_ = match.group(2) # "/user_uploads/2/7f/2E1qbem0o7P3PaKush4CSg6u/news_sents-1.txt"
+
+                            url_ = file_path_
+
+                            print(url_)
+
+                            # Construct full URL (replace with your Zulip server URL)
+                            full_file_url = f"https://chat.miem.hse.ru{url_}"
+
+                            print(full_file_url)
+                            
+                            # Download the file (using requests with your API key)
+                            response = requests.get(
+                                full_file_url,
+                                auth=requests.auth.HTTPBasicAuth(
+                                    "vt5_lesson_gen-bot@chat.miem.hse.ru",  # Your bot's email
+                                    "oYY0z3KU0llUmkfyOHwH09mfyFa2KMYM"  # Your bot's API key
+                                ),
+                            )
+                            response.raise_for_status()  # Check for HTTP errors
+                            # Get file content
+                            file_content = response.text
+
+                            user_file_contents[user_id] = file_content
+
+                            test1 = self.client.get_attachments()
+                            print(test1)
 
 
-                            self.send_reply(message, f"Супер! Получил твой файл {file_name}.{file_ext}. Введи число вопросов для генерации:")
+                            self.send_reply(message, f"Супер! Получил твой файл **`{file_name}.{file_ext}`**. Введи число вопросов для генерации:")
                             user_states[user_id] = {"state": "select_level"}
                             return
                         else:
@@ -185,7 +215,8 @@ try:
                         percentage = i / len(all_sents_splitted) * 100
                         formatted_percentage = f"{percentage:.2f}"
 
-                        self.send_reply(message, f'''Прогресс генерации: {formatted_percentage} %''')
+                        if i % 10 == 0:
+                            self.send_reply(message, f'''Прогресс генерации: {formatted_percentage} %''')
 
 
                     
@@ -216,7 +247,17 @@ try:
 
                     self.send_reply(message, f'''Я завершил генерацию!''')
 
-                    self.send_reply(message, f"""Вот твой файл с вопросами:\n{df_markdown}""")
+                    #self.send_reply(message, f"""Вот твой файл с вопросами:\n{df_markdown}""")
+
+                    with open(f"/home/user/vt5_file/test_{str(user_id)}.xlsx", "rb") as fp:
+                        result = self.client.upload_file(fp)
+                        print(result)
+
+                    mes_new = self.client.send_message({
+                            "type": "private",
+                            "to": message["sender_email"],
+                            "content": "Смотри, вот твой [файлик с вопросами]({})...".format(result["uri"]),
+                    })
 
 
                     user_states[user_id]["state"] = "main_menu"
