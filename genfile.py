@@ -157,6 +157,11 @@ try:
                             response.raise_for_status()  # Check for HTTP errors
                             # Get file content
                             file_content = response.text
+                            print('init')
+                            print(file_content)
+                            file_content = response.content.decode('utf-8', errors='replace')
+                            print('utf-8')
+                            print(file_ext)
 
                             user_file_contents[user_id] = file_content
 
@@ -279,3 +284,4 @@ try:
 
 except Exception:
     traceback.print_exc()
+
