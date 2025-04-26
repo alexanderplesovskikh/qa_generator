@@ -15,7 +15,7 @@ import pandas as pd
 from nltk import download
 download('punkt_tab')
 
-model_ollama = "owl/t-lite:latest"
+model_ollama = "gemma3:4b"
 
 init_ollama = OllamaLLM(
     model=model_ollama,
