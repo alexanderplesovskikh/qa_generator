@@ -33,13 +33,13 @@ cd python-zulip-api/zulip_bots/zulip_bots/bots/
 Здесь содержится несколько ботов, добавим сюда и нашего
 
 ```bash
-git clone https://gitlab.com/alexandermcme/exerciser.git
+git clone https://git.miem.hse.ru/301/genfile.git
 ```
 
 Перейдём в созданную папку
 
 ```bash
-mv exerciser exerciser_kg && cd exerciser_kg
+cd genfile
 ```
 
 Наконец, запустим бота с помощью скрипта
