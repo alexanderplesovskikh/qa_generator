@@ -36,12 +36,6 @@ cd python-zulip-api/zulip_bots/zulip_bots/bots/
 git clone https://git.miem.hse.ru/301/genfile.git
 ```
 
-Перейдём в созданную папку
-
-```bash
-cd genfile
-```
-
 Наконец, запустим бота с помощью скрипта
 
 ```bash
