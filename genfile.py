@@ -32,18 +32,38 @@ def format_llm_prompt(query):
 def generate_question(sentence):
     template = f"""Тебе нужно сгенерировать 1 (один вопрос), опираясь только на следующую информацию:
     {sentence}.
-    В твоем ответе укажи ТОЛЬКО сам один вопрос, ничего больше в ответе не пиши.
+    Не пытайся задать вопрос, который охватывает сразу всю информацию, которую я тебе предоставил выше, вопрос может охватывать или суть текста, или только какую-то основную часть текста выше.
+    В твоем ответе укажи ТОЛЬКО сам один вопрос, ничего больше в ответе не пиши (кроме "Нет вопроса.", смотри инструкцию дальше.)
+    Твой вопрос должен иметь смысл и быть понятен студенту, который не видит контекст и информации, которую я даю тебе. 
+    При этом вопрос должен иметь ответ, который очевиден человеку, разбирающемуся в этой теме, это не должен быть вопрос, ответ на который является узконаправленным, контекстным, локальным или мало знакомым.
+    Поэтому не нужно ссылать на текст при формулировании вопроса. В вопросе не должно быть ссылки на текст.
+    Если вопрос нельзя сгенерировать исходя из всех перечисленных здесь ограничений, то в ответе просто напиши "Нет вопроса."
     """
     res = format_llm_prompt(template)
     return res
 
-def generate_answer(question):
+def generate_answer(question, reference):
     template = f"""Тебе нужно сгенерировать ответ на данный вопрос:
     {question}.
+
+    Ответ на этот вопрос ты должен взять из данного контекста ниже, используй только эту информацию для написания ответа на вопрос и не используй никакой другой информации:
+    {reference}.
+
     Напиши только 1 абзац ответа, не пиши много, не пиши больше одного абзаца. В твоем ответе укажи ТОЛЬКО сам ответ на вопрос, ничего больше не пиши.
     """
     res = format_llm_prompt(template)
     return res
+
+def merge_n_neighbors(strings, n=2):
+    if n < 1:
+        raise ValueError("n must be at least 1")
+    
+    merged = [
+        " ".join(strings[i:i+n]) 
+        for i in range(0, len(strings), n)
+    ]
+    
+    return merged
 
 
 user_states = {}
@@ -114,7 +134,7 @@ try:
                     print(message['content'].strip()[-5:])
 
                     if is_only_file_link == False or len(message['content'].strip())<= 5 or (message['content'].strip()[-5:].lower() != ".txt)" and message['content'].strip()[-4:].lower() != ".md)"):
-                        self.send_reply(message, f'''Упс... это не текстовый файл формата .txt / .md, отправь файл в формате .txt / .md...''')
+                        self.send_reply(message, f'''😥 Упс... это не текстовый файл формата .txt / .md, отправь файл в формате .txt / .md...''')
                     else:
                         match = re.search(r'\[(.*?)\]', raw_content)  # Non-greedy match
                         if match:
@@ -124,8 +144,7 @@ try:
 
 
 
-                            with open("/home/user/vt5_file/test1.txt", "r", encoding="utf-8") as file_open:
-                                test_file = file_open.read()
+                         
 
 
 
@@ -155,21 +174,19 @@ try:
                                 ),
                             )
                             response.raise_for_status()  # Check for HTTP errors
-                            # Get file content
-                            file_content = response.text
-                            print('init')
-                            print(file_content)
+                          
+                          
+                       
                             file_content = response.content.decode('utf-8', errors='replace')
-                            print('utf-8')
-                            print(file_ext)
+                        
 
                             user_file_contents[user_id] = file_content
 
-                            test1 = self.client.get_attachments()
-                            print(test1)
+                           
+                          
 
 
-                            self.send_reply(message, f"Супер! Получил твой файл **`{file_name}.{file_ext}`**. Введи число вопросов для генерации:")
+                            self.send_reply(message, f"👍 Получил твой файл **`{file_name}.{file_ext}`**.\n\nВведи число вопросов для генерации (например, **10**):")
                             user_states[user_id] = {"state": "select_level"}
                             return
                         else:
@@ -188,7 +205,7 @@ try:
 
                    
 
-                    self.send_reply(message, f'''Я получил твой файл и начал генерацию вопросов и ответов к ним. Я уведомлю тебя, как закончу. Пожалуйста, подожди окончания генерация, ты можешь уйти с этой страницы во время ожидания...''')
+                    self.send_reply(message, f'''🕣 Я получил твой файл и начал генерацию вопросов и ответов к ним. Я уведомлю тебя, как закончу. Пожалуйста, подожди окончания генерация, ты можешь уйти с этой страницы во время ожидания...''')
 
                     print(user_file_contents[user_id])
 
@@ -197,10 +214,20 @@ try:
                     all_sents_splitted = []
 
                     for sent in sents_paragraphs:
-                        res = sent_tokenize(sent)
+                        sentences = re.split(r'(?<=[.!?])\s', sent)
+                        sentences = [s for s in sentences if s]
+                        res = sentences
                         for i in res:
-                            if len(i) >= 30:
-                                all_sents_splitted.append(i)
+                            if len(i.strip()) >= 70:
+                                if i.strip()[-1] in [".", "!", "?"]:
+                                    all_sents_splitted.append(i)
+
+                    print(all_sents_splitted[0:10])
+
+                    all_sents_splitted = merge_n_neighbors(all_sents_splitted, n=3)
+
+                    print(all_sents_splitted[0:10])
+
 
                     if len(all_sents_splitted) > max_number_of_questions:
                         all_sents_splitted = all_sents_splitted[:max_number_of_questions]
@@ -213,7 +240,7 @@ try:
                         print(current_question)
                         generated_questions.append(current_question)
 
-                        current_answer = generate_answer(current_question)
+                        current_answer = generate_answer(current_question, all_sents_splitted[i])
                         print(current_answer)
                         generated_answers.append(current_answer)
 
@@ -221,7 +248,7 @@ try:
                         formatted_percentage = f"{percentage:.2f}"
 
                         if i % 10 == 0:
-                            self.send_reply(message, f'''Прогресс генерации: {formatted_percentage} %''')
+                            self.send_reply(message, f'''⏳ Прогресс генерации: {formatted_percentage} %''')
 
 
                     
@@ -238,19 +265,20 @@ try:
                             current_date,
                             generated_questions[i], 
                             generated_answers[i], 
+                            all_sents_splitted[i]
                         ])
 
                     # 2. Convert to a Pandas DataFrame
                     df = pd.DataFrame(
                         all_massive,
-                        columns=["#", "File", "Date", "Question", "Answer"]
+                        columns=["#", "File", "Date", "Question", "Answer", "Reference"]
                     )
 
                     df.to_excel(f"/home/user/vt5_file/test_{str(user_id)}.xlsx", index=False)
 
                     df_markdown = df.to_markdown()
 
-                    self.send_reply(message, f'''Я завершил генерацию!''')
+                    self.send_reply(message, f'''✅ Я завершил генерацию!''')
 
                     #self.send_reply(message, f"""Вот твой файл с вопросами:\n{df_markdown}""")
 
@@ -261,7 +289,7 @@ try:
                     mes_new = self.client.send_message({
                             "type": "private",
                             "to": message["sender_email"],
-                            "content": "Смотри, вот твой [файлик с вопросами]({})...".format(result["uri"]),
+                            "content": "🏁 Смотри, вот твой [файлик с вопросами]({})...".format(result["uri"]),
                     })
 
 
