@@ -49,7 +49,8 @@ def generate_answer(question, reference):
     Ответ на этот вопрос ты должен взять из данного контекста ниже, используй только эту информацию для написания ответа на вопрос и не используй никакой другой информации:
     {reference}.
 
-    Напиши только 1 абзац ответа, не пиши много, не пиши больше одного абзаца. В твоем ответе укажи ТОЛЬКО сам ответ на вопрос, ничего больше не пиши.
+    Напиши только 1 абзац ответа, не пиши много, не пиши больше одного абзаца. Если ты получил вопрос: "Нет вопроса.", то в ответе напиши "Нет ответа.".
+    В твоем ответе укажи ТОЛЬКО сам ответ на вопрос, ничего больше не пиши.
     """
     res = format_llm_prompt(template)
     return res
@@ -69,7 +70,8 @@ def merge_n_neighbors(strings, n=2):
 user_states = {}
 user_history = {}
 user_file_names = {}
-user_file_contents= {}
+user_file_contents = {}
+user_file_dfs = {}
 
 main_menu = "Я бот-помощник, который умеет генерировать вопросы ❓ и ответы 🎯 для составления экзамена по учебному курсу. Отправь мне ниже файл в формате .txt / .md с материалами по **теме** курса *(один файл — одна тема)*"
 
@@ -124,74 +126,85 @@ try:
             
             if user_states[user_id]['state'] == 'wait_for_file':
 
-                print(message)
+                #print(message)
 
                 if 'content' in message and message['content'] != '':
+
                     raw_content = message['content'].strip()
-                    file_pattern = r'^\[.*?\]\(/user_uploads/.*?\)$'
-                    is_only_file_link = bool(re.fullmatch(file_pattern, raw_content))
-                    print(is_only_file_link)
-                    print(message['content'].strip()[-5:])
 
-                    if is_only_file_link == False or len(message['content'].strip())<= 5 or (message['content'].strip()[-5:].lower() != ".txt)" and message['content'].strip()[-4:].lower() != ".md)"):
-                        self.send_reply(message, f'''😥 Упс... это не текстовый файл формата .txt / .md, отправь файл в формате .txt / .md...''')
-                    else:
-                        match = re.search(r'\[(.*?)\]', raw_content)  # Non-greedy match
-                        if match:
-                            content_file_raw = match.group(1)  # "some content"
-                            file_ext = content_file_raw.split(".")[-1]
-                            file_name = ".".join(content_file_raw.split(".")[:-1])
+                    raw_content_files = raw_content.split("\n")
 
+                    user_file_names[user_id] = []
+                    user_file_contents[user_id] = []
 
+                    for file in raw_content_files:
+                        file_pattern = r'^\[.*?\]\(/user_uploads/.*?\)$'
+                        is_only_file_link = bool(re.fullmatch(file_pattern, file))
+                        print(is_only_file_link)
+                        print(message['content'].strip()[-5:])
 
-                         
-
-
-
-                            user_file_names[user_id] = str(file_name+"."+file_ext)
-                            
-
-                            match = re.search(r'\[(.*?)\]\((/user_uploads/.*?)\)', raw_content)
-                            if match:
-                                filename_ = match.group(1)  # "news_sents-1.txt"
-                                file_path_ = match.group(2) # "/user_uploads/2/7f/2E1qbem0o7P3PaKush4CSg6u/news_sents-1.txt"
-
-                            url_ = file_path_
-
-                            print(url_)
-
-                            # Construct full URL (replace with your Zulip server URL)
-                            full_file_url = f"https://chat.miem.hse.ru{url_}"
-
-                            print(full_file_url)
-                            
-                            # Download the file (using requests with your API key)
-                            response = requests.get(
-                                full_file_url,
-                                auth=requests.auth.HTTPBasicAuth(
-                                    "vt5_lesson_gen-bot@chat.miem.hse.ru",  # Your bot's email
-                                    "oYY0z3KU0llUmkfyOHwH09mfyFa2KMYM"  # Your bot's API key
-                                ),
-                            )
-                            response.raise_for_status()  # Check for HTTP errors
-                          
-                          
-                       
-                            file_content = response.content.decode('utf-8', errors='replace')
-                        
-
-                            user_file_contents[user_id] = file_content
-
-                           
-                          
-
-
-                            self.send_reply(message, f"👍 Получил твой файл **`{file_name}.{file_ext}`**.\n\nВведи число вопросов для генерации (например, **10**):")
-                            user_states[user_id] = {"state": "select_level"}
-                            return
+                        if is_only_file_link == False or len(file.strip())<= 5 or (file.strip()[-5:].lower() != ".txt)" and file.strip()[-4:].lower() != ".md)"):
+                            self.send_reply(message, f'''😥 Упс... это не текстовый файл формата .txt / .md, отправь файл в формате .txt / .md...''')
                         else:
-                            content = None  # No brackets found
-                            self.send_reply(message, "Ошибка: Файл не найден")
+                            match = re.search(r'\[(.*?)\]', file)  # Non-greedy match
+                            if match:
+                                content_file_raw = match.group(1)  # "some content"
+                                file_ext = content_file_raw.split(".")[-1]
+                                file_name = ".".join(content_file_raw.split(".")[:-1])
+
+
+
+                                
+
+                                user_file_names[user_id].append(str(file_name+"."+file_ext))
+                                
+
+                                match = re.search(r'\[(.*?)\]\((/user_uploads/.*?)\)', file)
+                                if match:
+                                    filename_ = match.group(1)  # "news_sents-1.txt"
+                                    file_path_ = match.group(2) # "/user_uploads/2/7f/2E1qbem0o7P3PaKush4CSg6u/news_sents-1.txt"
+
+                                url_ = file_path_
+
+                                print(url_)
+
+                                # Construct full URL (replace with your Zulip server URL)
+                                full_file_url = f"https://chat.miem.hse.ru{url_}"
+
+                                print(full_file_url)
+                                
+                                # Download the file (using requests with your API key)
+                                response = requests.get(
+                                    full_file_url,
+                                    auth=requests.auth.HTTPBasicAuth(
+                                        "vt5_lesson_gen-bot@chat.miem.hse.ru",  # Your bot's email
+                                        "oYY0z3KU0llUmkfyOHwH09mfyFa2KMYM"  # Your bot's API key
+                                    ),
+                                )
+                                response.raise_for_status()  # Check for HTTP errors
+                            
+                            
+                        
+                                file_content = response.content.decode('utf-8', errors='replace')
+                            
+
+                                
+                                user_file_contents[user_id].append(file_content)
+
+
+
+                                print('lists')
+                
+                                print(user_file_names[user_id])
+
+                            
+                            
+
+
+                    self.send_reply(message, f"👍 Получил твой файл **`{file_name}.{file_ext}`**.\n\nВведи число вопросов для генерации (например, **10**):")
+                    user_states[user_id] = {"state": "select_level"}
+                    return
+                        
 
 
             elif user_states[user_id]["state"] == "select_level":
@@ -207,89 +220,100 @@ try:
 
                     self.send_reply(message, f'''🕣 Я получил твой файл и начал генерацию вопросов и ответов к ним. Я уведомлю тебя, как закончу. Пожалуйста, подожди окончания генерация, ты можешь уйти с этой страницы во время ожидания...''')
 
-                    print(user_file_contents[user_id])
+                    #print(user_file_contents[user_id])
 
-                    sents_paragraphs = user_file_contents[user_id].split("\n")
+                    user_file_dfs[user_id] = []
 
-                    all_sents_splitted = []
+                    for user_file_idx in range(len(user_file_contents[user_id])):
 
-                    for sent in sents_paragraphs:
-                        sentences = re.split(r'(?<=[.!?])\s', sent)
-                        sentences = [s for s in sentences if s]
-                        res = sentences
-                        for i in res:
-                            if len(i.strip()) >= 70:
-                                if i.strip()[-1] in [".", "!", "?"]:
-                                    all_sents_splitted.append(i)
+                        sents_paragraphs = user_file_contents[user_id][user_file_idx].split("\n")
 
-                    print(all_sents_splitted[0:10])
+                        all_sents_splitted = []
 
-                    all_sents_splitted = merge_n_neighbors(all_sents_splitted, n=3)
+                        for sent in sents_paragraphs:
+                            sentences = re.split(r'(?<=[.!?])\s', sent)
+                            sentences = [s for s in sentences if s]
+                            res = sentences
+                            for i in res:
+                                if len(i.strip()) >= 70:
+                                    if i.strip()[-1] in [".", "!", "?"]:
+                                        all_sents_splitted.append(i)
 
-                    print(all_sents_splitted[0:10])
+                        #print(all_sents_splitted[0:10])
 
+                        all_sents_splitted = merge_n_neighbors(all_sents_splitted, n=3)
 
-                    if len(all_sents_splitted) > max_number_of_questions:
-                        all_sents_splitted = all_sents_splitted[:max_number_of_questions]
-
-                    generated_questions = []
-                    generated_answers = []
-
-                    for i in range(len(all_sents_splitted)):
-                        current_question = generate_question(all_sents_splitted[i])
-                        print(current_question)
-                        generated_questions.append(current_question)
-
-                        current_answer = generate_answer(current_question, all_sents_splitted[i])
-                        print(current_answer)
-                        generated_answers.append(current_answer)
-
-                        percentage = i / len(all_sents_splitted) * 100
-                        formatted_percentage = f"{percentage:.2f}"
-
-                        if i % 10 == 0:
-                            self.send_reply(message, f'''⏳ Прогресс генерации: {formatted_percentage} %''')
+                        #print(all_sents_splitted[0:10])
 
 
-                    
-                    
-                 
+                        if len(all_sents_splitted) > max_number_of_questions:
+                            all_sents_splitted = all_sents_splitted[:max_number_of_questions]
+
+                        generated_questions = []
+                        generated_answers = []
+
+                        for i in range(len(all_sents_splitted)):
+                            current_question = generate_question(all_sents_splitted[i])
+                            print(current_question)
+                            generated_questions.append(current_question)
+
+                            current_answer = generate_answer(current_question, all_sents_splitted[i])
+                            print(current_answer)
+                            generated_answers.append(current_answer)
+
+                            percentage = i / len(all_sents_splitted) * 100
+                            formatted_percentage = f"{percentage:.2f}"
+
+                            if i % 10 == 0:
+                                self.send_reply(message, f'''⏳ Прогресс генерации: {formatted_percentage} %''')
+                            
+
+                        all_massive = []
+                        current_date = datetime.now().strftime("%d.%m.%Y")
+                        for i in range(len(generated_questions)):
+                            all_massive.append([
+                                i+1,
+                                user_file_names[user_id][user_file_idx],
+                                current_date,
+                                generated_questions[i], 
+                                generated_answers[i], 
+                                all_sents_splitted[i]
+                            ])
+
+                        # 2. Convert to a Pandas DataFrame
+                        df = pd.DataFrame(
+                            all_massive,
+                            columns=["#", "File", "Date", "Question", "Answer", "Reference"]
+                        )
+
+                        user_file_dfs[user_id].append(df)
+
                         
 
-                    all_massive = []
-                    current_date = datetime.now().strftime("%d.%m.%Y")
-                    for i in range(len(generated_questions)):
-                        all_massive.append([
-                            i+1,
-                            user_file_names[user_id],
-                            current_date,
-                            generated_questions[i], 
-                            generated_answers[i], 
-                            all_sents_splitted[i]
-                        ])
+                        #df_markdown = df.to_markdown()
 
-                    # 2. Convert to a Pandas DataFrame
-                    df = pd.DataFrame(
-                        all_massive,
-                        columns=["#", "File", "Date", "Question", "Answer", "Reference"]
-                    )
+                        self.send_reply(message, f'''✅ Я завершил генерацию!''')
 
-                    df.to_excel(f"/home/user/vt5_file/test_{str(user_id)}.xlsx", index=False)
+                        #self.send_reply(message, f"""Вот твой файл с вопросами:\n{df_markdown}""")
+                    
+                    # Example list of DataFrames
+                    output_path = f"/home/user/vt5_file/userData_{user_id}.xlsx"
 
-                    df_markdown = df.to_markdown()
+                    print(user_file_dfs[user_id])
 
-                    self.send_reply(message, f'''✅ Я завершил генерацию!''')
+                    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                        for idx, df in enumerate(user_file_dfs[user_id]):
+                            sheet_name = f"Sheet_{idx + 1}"  # Or use sheet_names[idx] if predefined
+                            df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                    #self.send_reply(message, f"""Вот твой файл с вопросами:\n{df_markdown}""")
-
-                    with open(f"/home/user/vt5_file/test_{str(user_id)}.xlsx", "rb") as fp:
+                    with open(f"/home/user/vt5_file/userData_{str(user_id)}.xlsx", "rb") as fp:
                         result = self.client.upload_file(fp)
                         print(result)
 
                     mes_new = self.client.send_message({
-                            "type": "private",
-                            "to": message["sender_email"],
-                            "content": "🏁 Смотри, вот твой [файлик с вопросами]({})...".format(result["uri"]),
+                                "type": "private",
+                                "to": message["sender_email"],
+                                "content": "🏁 Смотри, вот твой [файлик с вопросами]({})...".format(result["uri"]),
                     })
 
 
