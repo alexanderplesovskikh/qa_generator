@@ -145,7 +145,7 @@ try:
                             print(message['content'].strip()[-5:])
 
                             if is_only_file_link == False or len(file.strip())<= 5 or (file.strip()[-5:].lower() != ".txt)" and file.strip()[-4:].lower() != ".md)"):
-                                self.send_reply(message, f'''😥 Упс... это не текстовый файл формата .txt / .md, отправь файл в формате .txt / .md...''')
+                                self.send_reply(message, f'''😥 Упс... есть файлики формата не .txt / .md, я их тихо пропущу...''')
                             else:
                                 match = re.search(r'\[(.*?)\]', file)  # Non-greedy match
                                 if match:
