@@ -1,4 +1,4 @@
-# Бот QA Generator
+# Бот QA Generator 🤖
 Бот-генератор помогает генерировать вопросы и ответы по темам курса, необходимые для создания базы ВиО бота-экзаменатора.
 
 ![Q&A bot generator hero image](https://github.com/alexanderplesovskikh/qa_generator/blob/master/qa_generator.png)
